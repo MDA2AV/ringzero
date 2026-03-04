@@ -18,22 +18,48 @@ Requires liburing (`liburing-dev` on Debian/Ubuntu).
 make
 ```
 
+Produces:
+- `rgzero` — server binary (linked against `libringzero.so` with `$ORIGIN` rpath)
+- `libringzero.so` — shared library
+- `libringzero.a` — static library
+
 ## Running
 
 ```bash
 ./rgzero [reactor_count]    # default: 12 reactors
 ```
 
-Stop with `Ctrl+C` or `SIGTERM`.
+Listens on `0.0.0.0:8080`. Stop with `Ctrl+C` or `SIGTERM`.
 
 ## Project Structure
 
 ```
-include/    constants.h, queue.h, listener.h, connection.h, reactor.h, acceptor.h, engine.h
-src/        main.c, engine.c, acceptor.c, reactor.c, connection.c, listener.c
-obj/        build artifacts (gitignored)
+include/
+  constants.h    — UD packing macros, ring/buffer tunables
+  queue.h        — lock-free SPSC queue (acceptor → reactor fd handoff)
+  listener.h     — TCP listen socket setup
+  connection.h   — per-connection state, write buffering
+  reactor.h      — reactor struct, event loop, provided buffer ring
+  acceptor.h     — multishot accept loop
+  engine.h       — thread orchestration (acceptor + N reactors)
+  ringzero.h     — umbrella header
+
+src/lib/
+  engine.c       — spawn/join acceptor and reactor threads
+  acceptor.c     — multishot accept, round-robin fd distribution
+  reactor.c      — io_uring event loop (recv/send/cancel)
+  connection.c   — write slab management, flush logic
+  listener.c     — SO_REUSEADDR/PORT, nonblocking listen socket
+
+src/app/
+  main.c         — CLI, signal handling, plaintext HTTP handler
 ```
 
-## Performance
+## Key io_uring patterns
 
-~3.5M req/s on localhost (4 reactors, 100 connections, wrk) vs zerg ~3.3M req/s with the same architecture.
+- **Single syscall loop** — `io_uring_submit_and_wait_timeout` submits + harvests in one kernel entry
+- **Zero-copy recv** — provided buffer rings (`io_uring_setup_buf_ring`), kernel writes directly into pre-registered memory
+- **Multishot recv** — one SQE arms continuous receive, no re-arming per event
+- **Batch CQE processing** — `io_uring_peek_batch_cqe` harvests up to 4096 completions at once
+- **User-data packing** — `PACK_UD(kind, fd)` encodes operation type + fd in 64 bits
+

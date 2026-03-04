@@ -19,8 +19,8 @@ libringzero.a: $(LIB_OBJS)
 libringzero.so: $(LIB_PIC_OBJS)
 	$(CC) -shared -o $@ $^ $(LDFLAGS)
 
-rgzero: $(APP_OBJS) libringzero.a
-	$(CC) $(CFLAGS) -o $@ $(APP_OBJS) -L. -lringzero $(LDFLAGS)
+rgzero: $(APP_OBJS) libringzero.so
+	$(CC) $(CFLAGS) -o $@ $(APP_OBJS) -L. -lringzero -Wl,-rpath,'$$ORIGIN' $(LDFLAGS)
 
 # ---------- compile rules ----------
 obj/lib/%.o: src/lib/%.c | obj/lib

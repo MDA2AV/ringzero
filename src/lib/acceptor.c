@@ -67,7 +67,8 @@ void acceptor_loop(acceptor_t *a, reactor_t *reactors, int reactor_count)
                     while (!spsc_enqueue(&reactors[target].new_fd_queue, client_fd))
                         ;
                 } else {
-                    fprintf(stderr, "[acceptor] accept error: %d\n", res);
+                    fprintf(stderr, "[acceptor] accept error: %d (%s)\n",
+                            res, strerror(-res));
                 }
 
                 /* Re-arm if kernel dropped multishot */
